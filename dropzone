@@ -1,0 +1,137 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local raycastParams = RaycastParams.new()
+raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+raycastParams.IgnoreWater = true
+
+local function getHealth(character, humanoid)
+    local attrHealth = character:GetAttribute("Health") or character:GetAttribute("HP")
+    local attrMaxHealth = character:GetAttribute("MaxHealth") or character:GetAttribute("MaxHP") or 100
+    if attrHealth then return attrHealth, attrMaxHealth end
+
+    local valHealth = character:FindFirstChild("Health") or character:FindFirstChild("HP")
+    if valHealth and (valHealth:IsA("NumberValue") or valHealth:IsA("IntValue")) then
+        local valMax = character:FindFirstChild("MaxHealth") or character:FindFirstChild("MaxHP")
+        local maxHp = (valMax and valMax.Value) or 100
+        return valHealth.Value, maxHp
+    end
+
+    if humanoid then return humanoid.Health, humanoid.MaxHealth end
+    return 100, 100
+end
+
+local function createAdvancedESP(player)
+    if player == LocalPlayer then return end
+
+    local function apply(character)
+        if not character then return end
+        
+        if character:FindFirstChild("CompactESP_Highlight") then character.CompactESP_Highlight:Destroy() end
+        if character:FindFirstChild("CompactESP_Billboard") then character.CompactESP_Billboard:Destroy() end
+
+        local hrp = character:WaitForChild("HumanoidRootPart", 5)
+        local head = character:WaitForChild("Head", 5)
+        local humanoid = character:WaitForChild("Humanoid", 5)
+        if not hrp or not head then return end
+
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "CompactESP_Highlight"
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = character
+
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "CompactESP_Billboard"
+        billboard.Adornee = hrp
+        billboard.Size = UDim2.new(0, 140, 0, 45)
+        billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+        billboard.AlwaysOnTop = true
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 0, 24)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        textLabel.TextSize = 12
+        textLabel.Font = Enum.Font.SourceSansBold
+        textLabel.Parent = billboard
+
+        local healthBg = Instance.new("Frame")
+        healthBg.Size = UDim2.new(0.5, 0, 0, 3)
+        healthBg.Position = UDim2.new(0.25, 0, 0.65, 0)
+        healthBg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        healthBg.BorderSizePixel = 0
+        healthBg.Parent = billboard
+
+        local bgCorner = Instance.new("UICorner")
+        bgCorner.CornerRadius = UDim.new(1, 0)
+        bgCorner.Parent = healthBg
+
+        local healthBar = Instance.new("Frame")
+        healthBar.Size = UDim2.new(1, 0, 1, 0)
+        healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        healthBar.BorderSizePixel = 0
+        healthBar.Parent = healthBg
+
+        local barCorner = Instance.new("UICorner")
+        barCorner.CornerRadius = UDim.new(1, 0)
+        barCorner.Parent = healthBar
+
+        billboard.Parent = character
+
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if character and character.Parent and hrp and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local localHrp = LocalPlayer.Character.HumanoidRootPart
+                local origin = Camera.CFrame.Position
+                local targetPos = head.Position
+                local direction = targetPos - origin
+
+                raycastParams.FilterObjects = {LocalPlayer.Character, character}
+                local rayResult = workspace:Raycast(origin, direction, raycastParams)
+                local isVisible = (rayResult == nil)
+
+                if isVisible then
+                    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+                    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+                else
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                end
+
+                local distanceMeters = math.floor((hrp.Position - localHrp.Position).Magnitude / 3.57)
+                local currentHp, maxHp = getHealth(character, humanoid)
+                local healthPercent = math.clamp(currentHp / maxHp, 0, 1)
+
+                textLabel.Text = string.format("%s [%d m]", player.Name, distanceMeters)
+                healthBar.Size = UDim2.new(healthPercent, 0, 1, 0)
+
+                if healthPercent > 0.5 then
+                    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                elseif healthPercent > 0.25 then
+                    healthBar.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+                else
+                    healthBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                end
+            else
+                if connection then connection:Disconnect() end
+            end
+        end)
+    end
+
+    if player.Character then apply(player.Character) end
+    player.CharacterAdded:Connect(apply)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+    createAdvancedESP(p)
+end
+
+Players.PlayerAdded:Connect(createAdvancedESP)
+
+print("[DROPZONE] losthub")
